@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f7f8fc">
+  <title>Shuan｜SHM</title>
+  <style>
+    :root { color-scheme: light; --ink:#293247; --muted:#758096; --line:#e5e9f1; --accent:#697da8; --accent-soft:#edf1f8; }
+    * { box-sizing: border-box; }
+    html, body { width:100%; height:100%; margin:0; }
+    body { display:flex; flex-direction:column; overflow:hidden; background:#f7f8fc; color:var(--ink); font-family:system-ui,-apple-system,"Segoe UI",sans-serif; }
+    .topbar { z-index:2; flex:0 0 auto; min-height:62px; display:flex; align-items:center; justify-content:space-between; gap:14px; padding:9px 18px; background:rgba(255,255,255,.96); border-bottom:1px solid var(--line); box-shadow:0 2px 12px rgba(38,52,78,.05); }
+    .brand { min-width:0; font-size:15px; font-weight:700; letter-spacing:.04em; white-space:nowrap; }
+    .switcher { display:flex; align-items:center; justify-content:center; gap:8px; }
+    .switcher button { appearance:none; border:1px solid var(--line); border-radius:999px; padding:9px 19px; background:#fff; color:var(--ink); font:inherit; font-size:14px; font-weight:650; cursor:pointer; transition:background .18s ease,border-color .18s ease,color .18s ease; }
+    .switcher button[aria-pressed="true"] { color:#fff; background:var(--accent); border-color:var(--accent); }
+    .open-original { flex:0 0 auto; color:var(--muted); font-size:12px; text-decoration:none; white-space:nowrap; }
+    .open-original:hover { color:var(--accent); text-decoration:underline; }
+    .stage { position:relative; flex:1 1 auto; min-height:0; background:#fff; }
+    .site-frame { position:absolute; inset:0; display:block; width:100%; height:100%; border:0; background:#fff; }
+    .site-frame[hidden] { display:none; }
+    @media (max-width:600px) {
+      .topbar { min-height:58px; padding:8px 10px; gap:8px; }
+      .brand { font-size:12px; letter-spacing:0; }
+      .switcher { gap:5px; }
+      .switcher button { padding:8px 13px; font-size:13px; }
+      .open-original { max-width:58px; white-space:normal; text-align:right; line-height:1.25; font-size:11px; }
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">雙站整合入口</div>
+    <nav class="switcher" aria-label="網站切換">
+      <button type="button" data-site="shuan" aria-pressed="true">Shuan</button>
+      <button type="button" data-site="shm" aria-pressed="false">SHM</button>
+    </nav>
+    <a class="open-original" id="open-original" href="https://lionliontomato.github.io/shuan/" target="_blank" rel="noopener noreferrer">另開原網站 ↗</a>
+  </header>
+
+  <main class="stage" id="stage">
+    <iframe class="site-frame" id="frame-shuan" title="Shuan 原網站" src="https://lionliontomato.github.io/shuan/" allow="fullscreen"></iframe>
+    <iframe class="site-frame" id="frame-shm" title="SHM 原網站" src="https://lionliontomato.github.io/SHM/" allow="fullscreen" hidden></iframe>
+  </main>
+
+  <script>
+    (() => {
+      const sites = {
+        shuan: { frame: document.getElementById('frame-shuan'), button: document.querySelector('[data-site="shuan"]'), url: 'https://lionliontomato.github.io/shuan/', label: 'Shuan' },
+        shm:   { frame: document.getElementById('frame-shm'),   button: document.querySelector('[data-site="shm"]'),   url: 'https://lionliontomato.github.io/SHM/',   label: 'SHM' }
+      };
+      let activeSite = 'shuan';
+      let iconLink = document.getElementById('active-site-icon');
+
+      function syncSiteIdentity(key) {
+        const site = sites[key];
+        try {
+          const doc = site.frame.contentDocument;
+          if (!doc) return;
+          const icon = Array.from(doc.querySelectorAll('link[rel]')).find(link =>
+            link.relList && link.relList.contains('icon') && link.href
+          );
+          if (icon) {
+            if (!iconLink) {
+              iconLink = document.createElement('link');
+              iconLink.id = 'active-site-icon';
+              iconLink.rel = 'icon';
+              document.head.appendChild(iconLink);
+            }
+            iconLink.type = icon.type || '';
+            if (icon.sizes && icon.sizes.value) iconLink.sizes = icon.sizes.value;
+            iconLink.href = icon.href;
+          } else if (iconLink) {
+            iconLink.remove();
+            iconLink = null;
+          }
+          if (doc.title && doc.title.trim()) document.title = doc.title.trim();
+          else document.title = site.label;
+        } catch (error) {
+          // Both GitHub Pages URLs share the same origin. If browser policy
+          // prevents reading the child document, keep the shell title/icon.
+          document.title = site.label;
+        }
+      }
+
+      function watchSiteIcon(key) {
+        const frame = sites[key].frame;
+        try {
+          const doc = frame.contentDocument;
+          if (!doc || !doc.head || frame.dataset.iconObserved === 'yes') return;
+          const observer = new MutationObserver(() => {
+            if (activeSite === key) syncSiteIdentity(key);
+          });
+          observer.observe(doc.head, { childList: true, subtree: true, attributes: true, attributeFilter: ['href', 'rel'] });
+          frame.dataset.iconObserved = 'yes';
+        } catch (error) { /* Keep the page usable even if identity sync is blocked. */ }
+      }
+
+      Object.entries(sites).forEach(([key, site]) => {
+        site.frame.addEventListener('load', () => {
+          watchSiteIcon(key);
+          if (activeSite === key) syncSiteIdentity(key);
+        });
+      });
+
+      function switchSite(key) {
+        if (!sites[key]) return;
+        activeSite = key;
+        Object.entries(sites).forEach(([name, site]) => {
+          const selected = name === key;
+          site.frame.hidden = !selected;
+          site.button.setAttribute('aria-pressed', selected ? 'true' : 'false');
+        });
+        document.getElementById('open-original').href = sites[key].url;
+        syncSiteIdentity(key);
+        watchSiteIcon(key);
+      }
+
+      document.querySelectorAll('[data-site]').forEach(button => {
+        button.addEventListener('click', () => switchSite(button.dataset.site));
+      });
+      switchSite('shuan');
+    })();
+  </script>
+</body>
+</html>
